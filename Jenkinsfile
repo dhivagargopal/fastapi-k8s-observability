@@ -51,8 +51,8 @@ pipeline {
                         python3 -m venv venv
                         . venv/bin/activate
                         pip install --upgrade pip
-                        pip install -r requirements.txt
-                        pip install pytest pytest-asyncio httpx   # test deps
+                        pip install --cache-dir "$HOME/.cache/pip" -r requirements.txt
+                        pip install --cache-dir "$HOME/.cache/pip" pytest pytest-asyncio httpx   # test deps
                     '''
                 }
             }
@@ -98,15 +98,12 @@ pipeline {
         // ──────────────────────────────────────────────────────────────────
             steps {
                 echo "==> Building Docker image: ${DOCKER_IMAGE}:${DOCKER_TAG}"
-                dir("${APP_DIR}") {
-                    sh """
-                        docker build \
-                            --no-cache \
-                            -t ${DOCKER_IMAGE}:${DOCKER_TAG} \
-                            -t ${DOCKER_IMAGE}:latest \
-                            -f Dockerfile .
-                    """
-                }
+                sh """
+                    docker build \
+                        -t ${DOCKER_IMAGE}:${DOCKER_TAG} \
+                        -t ${DOCKER_IMAGE}:latest \
+                        -f Dockerfile .
+                """
                 sh "docker images | grep ${DOCKER_IMAGE}"
             }
         }
