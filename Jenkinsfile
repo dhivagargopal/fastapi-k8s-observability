@@ -108,6 +108,7 @@ pipeline {
             }
         }
 
+
         // ──────────────────────────────────────────────────────────────────
         stage('Push to Registry') {
         // ──────────────────────────────────────────────────────────────────
@@ -132,6 +133,9 @@ pipeline {
 
         // ──────────────────────────────────────────────────────────────────
         stage('Setup Monitoring (Helm)') {
+        // ──────────────────────────────────────────────────────────────────
+        // Installs kube-prometheus-stack if not already present.
+        // Skips safely on re-runs (helm upgrade --install is idempotent).
         // ──────────────────────────────────────────────────────────────────
             steps {
                 echo '==> Ensuring Prometheus + Grafana are deployed via Helm...'
@@ -175,6 +179,19 @@ pipeline {
         }
 
         // ──────────────────────────────────────────────────────────────────
+        stage('Apply HPA') {
+        // ──────────────────────────────────────────────────────────────────
+            steps {
+                echo '==> Applying Horizontal Pod Autoscaler for FastAPI...'
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh """
+                        kubectl apply -f hpa.yaml --namespace ${K8S_NAMESPACE}
+                    """
+                }
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────────
         stage('Apply Grafana Dashboard') {
         // ──────────────────────────────────────────────────────────────────
             steps {
@@ -190,6 +207,79 @@ pipeline {
                             grafana_dashboard=1 \
                             --namespace ${MONITORING_NS} \
                             --overwrite
+                    """
+                }
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────────
+        stage('Rollout Verification') {
+        // ──────────────────────────────────────────────────────────────────
+            steps {
+                echo '==> Waiting for rollout to complete...'
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh """
+                        kubectl rollout status deployment/${DEPLOYMENT_NAME} \
+                            --namespace ${K8S_NAMESPACE} \
+                            --timeout=180s
+
+                        echo '--- Pod status ---'
+                        kubectl get pods -l app=fastapi --namespace ${K8S_NAMESPACE}
+
+                        echo '--- Service ---'
+                        kubectl get svc fastapi-service --namespace ${K8S_NAMESPACE}
+
+                        echo '--- ServiceMonitor ---'
+                        kubectl get servicemonitor --namespace ${MONITORING_NS} || true
+                    """
+                }
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────────
+        stage('Health Check') {
+        // ──────────────────────────────────────────────────────────────────
+            steps {
+                echo '==> Verifying /health endpoint via NodePort 30001...'
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh """
+                        NODE_IP=\$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+                        echo "Node IP: \${NODE_IP}"
+
+                        # Retry up to 10 times with 10s delay (pods may still be initialising)
+                        for i in \$(seq 1 10); do
+                            STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://\${NODE_IP}:30001/health)
+                            echo "Attempt \${i}: HTTP \${STATUS}"
+                            if [ "\${STATUS}" = "200" ]; then
+                                echo "Health check passed!"
+                                exit 0
+                            fi
+                            sleep 10
+                        done
+
+                        echo "Health check failed after 10 attempts"
+                        exit 1
+                    """
+                }
+            }
+        }
+
+        // ──────────────────────────────────────────────────────────────────
+        stage('Verify Prometheus Scraping') {
+        // ──────────────────────────────────────────────────────────────────
+            steps {
+                echo '==> Checking /metrics endpoint is reachable...'
+                withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+                    sh """
+                        NODE_IP=\$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+                        METRICS=\$(curl -s http://\${NODE_IP}:30001/metrics | head -5)
+                        echo "\${METRICS}"
+
+                        if echo "\${METRICS}" | grep -q 'http_requests'; then
+                            echo "Prometheus metrics endpoint is live!"
+                        else
+                            echo "Warning: metrics endpoint returned unexpected output"
+                        fi
                     """
                 }
             }
