@@ -52,7 +52,7 @@ pipeline {
                         . venv/bin/activate
                         pip install --upgrade pip
                         pip install --cache-dir "$HOME/.cache/pip" -r requirements.txt
-                        pip install --cache-dir "$HOME/.cache/pip" pytest pytest-asyncio httpx   # test deps
+                        pip install --cache-dir "$HOME/.cache/pip" -r requirements-dev.txt
                     '''
                 }
             }
@@ -164,15 +164,15 @@ pipeline {
                 echo "==> Deploying fastapi-app to Kubernetes namespace: ${K8S_NAMESPACE}"
                 withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
                     sh """
-                        # Patch image tag in deployment (non-destructive update)
-                        kubectl set image deployment/${DEPLOYMENT_NAME} \
-                            ${CONTAINER_NAME}=\${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} \
-                            --namespace ${K8S_NAMESPACE} 2>/dev/null || true
-
                         # Apply manifests (creates resources if they don't exist yet)
                         kubectl apply -f deployment.yaml  --namespace ${K8S_NAMESPACE}
                         kubectl apply -f service.yaml     --namespace ${K8S_NAMESPACE}
                         kubectl apply -f service-monitor.yaml --namespace ${MONITORING_NS}
+
+                        # Patch image tag after apply so deployment.yaml does not overwrite it
+                        kubectl set image deployment/${DEPLOYMENT_NAME} \
+                            ${CONTAINER_NAME}=\${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} \
+                            --namespace ${K8S_NAMESPACE}
                     """
                 }
             }

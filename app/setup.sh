@@ -8,6 +8,8 @@ APP_NAME="fastapi-app"
 DOCKER_IMAGE="fastapi-app:latest"
 NAMESPACE="default"
 PROM_RELEASE_NAME="monitoring"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Function to check if a command exists
 command_exists() {
@@ -26,8 +28,8 @@ done
 
 # Start Minikube if not running, with increased resources
 if ! minikube status >/dev/null 2>&1; then
-    echo "Starting Minikube with increased resources..."
-    minikube start --cpus 4 --memory 7680
+    echo "Starting Minikube..."
+    minikube start --cpus 2 --memory 4096
 else
     echo "Minikube is already running. Continuing with setup..."
 fi
@@ -38,7 +40,7 @@ eval $(minikube docker-env)
 
 # Build the Docker image inside Minikube's Docker daemon
 echo "Building Docker image..."
-docker build -t $DOCKER_IMAGE .
+docker build -t $DOCKER_IMAGE -f "$REPO_ROOT/Dockerfile" "$REPO_ROOT"
 
 # Install Prometheus and Grafana using Helm
 echo "Installing Prometheus and Grafana..."
@@ -52,12 +54,12 @@ kubectl wait --for condition=established --timeout=60s crd/servicemonitors.monit
 
 # Apply Kubernetes configurations
 echo "Applying Kubernetes configurations..."
-kubectl apply -f ../deployment.yaml
-kubectl apply -f ../service.yaml
+kubectl apply -f "$REPO_ROOT/deployment.yaml"
+kubectl apply -f "$REPO_ROOT/service.yaml"
 
 # Apply ServiceMonitor configuration
 echo "Applying ServiceMonitor configuration..."
-kubectl apply -f ../service-monitor.yaml
+kubectl apply -f "$REPO_ROOT/service-monitor.yaml"
 
 # Wait for Pods to be ready
 echo "Waiting for Pods to be ready..."
@@ -76,8 +78,8 @@ echo "Grafana admin password: $GRAFANA_PASSWORD"
 
 # Create Grafana dashboard
 echo "Creating Grafana dashboard..."
-kubectl create configmap grafana-dashboard-config --from-file=../app/grafana-dashboard.json -n $NAMESPACE
-kubectl label configmap grafana-dashboard-config grafana_dashboard=1 -n $NAMESPACE
+kubectl create configmap grafana-dashboard-config --from-file="$SCRIPT_DIR/grafana-dashboard.json" -n $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+kubectl label configmap grafana-dashboard-config grafana_dashboard=1 -n $NAMESPACE --overwrite
 
 # Wait for the dashboard to be created
 echo "Waiting for Grafana dashboard to be created..."
@@ -100,9 +102,9 @@ echo "To access Grafana, navigate to http://localhost:3000 and log in with usern
 # Function to clean up resources
 cleanup() {
     echo "Cleaning up..."
-    kubectl delete -f ../deployment.yaml
-    kubectl delete -f ../service.yaml
-    kubectl delete -f ../service-monitor.yaml
+    kubectl delete -f "$REPO_ROOT/deployment.yaml"
+    kubectl delete -f "$REPO_ROOT/service.yaml"
+    kubectl delete -f "$REPO_ROOT/service-monitor.yaml"
     kubectl delete configmap grafana-dashboard-config -n $NAMESPACE
     helm uninstall $PROM_RELEASE_NAME
     minikube stop

@@ -1,179 +1,87 @@
-# FastAPI Kubernetes Deployment with Monitoring
+# FastAPI Local LLM Demo
 
-This project demonstrates how to deploy a FastAPI application on Kubernetes with integrated monitoring using Prometheus and Grafana. It includes a FastAPI app, Dockerfile for containerization, Kubernetes configuration files, and setup scripts for easy deployment and monitoring.
+This is a simple FastAPI project with Kubernetes monitoring. The `/generate` endpoint uses a small built-in local text generator, so it runs with no API key, no Hugging Face/OpenAI account, and no paid LLM calls.
 
-## Table of Contents
+## Endpoints
 
-1. [Project Structure](#project-structure)
-2. [FastAPI Application](#fastapi-application)
-3. [Docker Configuration](#docker-configuration)
-4. [Kubernetes Deployment](#kubernetes-deployment)
-5. [Monitoring Setup](#monitoring-setup)
-6. [Getting Started](#getting-started)
-7. [Manual Setup](#manual-setup)
-8. [Dependencies](#dependencies)
-9. [Cleanup](#cleanup)
+- `GET /` - basic app response
+- `GET /health` - health check for Kubernetes probes
+- `GET /items/{item_id}` - sample item endpoint
+- `POST /generate` - free local text generation
+- `GET /metrics` - Prometheus metrics
 
-## Project Structure
+Example:
 
-```
-.
-├── app/
-│   ├── main.py
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   ├── setup.sh
-│   ├── locustfile.py
-│   └── grafana-dashboard.json
-├── deployment.yaml
-├── service.yaml
-├── service-monitor.yaml
-└── README.md
+```bash
+curl -X POST http://localhost:8000/generate \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Once upon a time"}'
 ```
 
-## FastAPI Application
+## Run With Docker
 
-The FastAPI application provides several endpoints:
+```bash
+docker build -t fastapi-app:latest -f Dockerfile .
+docker run --rm -p 8000:8000 fastapi-app:latest
+```
 
-1. Root endpoint (`/`): Returns a greeting message
-2. Items endpoint (`/items/{item_id}`): Returns item details
-3. Generate endpoint (`/generate`): Generates text using a language model
-4. Generate Quantized endpoint (`/generate_quantized`): Generates text using a quantized language model
-5. Health endpoint (`/health`): Returns the health status of the application
-6. Metrics endpoint (`/metrics`): Exposes application metrics for Prometheus
+Open:
 
-For more details, see `app/main.py`.
+```text
+http://localhost:8000
+http://localhost:8000/health
+http://localhost:8000/metrics
+```
 
-## Docker Configuration
+## Run On Kubernetes
 
-The application is containerized using Docker. The Dockerfile specifies:
+```bash
+kubectl apply -f deployment.yaml
+kubectl apply -f service.yaml
+kubectl apply -f service-monitor.yaml
+```
 
-- Python 3.12 slim image as the base
-- Installation of dependencies from `requirements.txt`
-- Copying of application files
-- Command to run the FastAPI app using Gunicorn and Uvicorn workers
+If you are using Minikube:
 
-For more details, see `app/Dockerfile`.
+```bash
+minikube service fastapi-service
+```
 
-## Kubernetes Deployment
+## Monitoring
 
-The application is deployed on Kubernetes using the following configurations:
+This project includes:
 
-### Deployment (`deployment.yaml`)
+- `service-monitor.yaml` for Prometheus scraping
+- `app/grafana-dashboard.json` for Grafana
+- `app/setup.sh` for a Minikube + Prometheus + Grafana setup
 
-- Creates replicas of the FastAPI application
-- Uses the `fastapi-app:latest` image
-- Sets resource requests and limits
-- Configures liveness and readiness probes
-
-### Service (`service.yaml`)
-
-- Exposes the application using a NodePort service
-- Maps port 8000 of the container to NodePort 30001
-
-### ServiceMonitor (`service-monitor.yaml`)
-
-- Configures Prometheus to scrape metrics from the FastAPI application
-
-## Monitoring Setup
-
-The project uses Prometheus for metrics collection and Grafana for visualization.
-
-- Prometheus: Collects and stores metrics from the application and cluster.
-- Grafana: Visualizes the metrics collected by Prometheus.
-
-A custom Grafana dashboard is provided in `app/grafana-dashboard.json`.
-
-## Getting Started
-
-For a quick start, run the following command:
+Quick setup:
 
 ```bash
 cd app
 ./setup.sh
 ```
 
-This script will:
-1. Start or configure Minikube
-2. Build the Docker image
-3. Deploy the application to Kubernetes
-4. Install Prometheus and Grafana using Helm
-5. Apply the custom Grafana dashboard
-
-After the setup is complete:
-- Access the FastAPI application via Minikube service or NodePort
-- Access Grafana at http://localhost:3000 (username: admin, password will be displayed)
-
-To start the FastAPI service:
-```bash
-minikube service fastapi-service
-```
-
-To run load tests with Locust:
-```bash
-locust -f app/locustfile.py --host=<URL-FROM-MINIKUBE-COMMAND-ABOVE>
-```
-
-## Manual Setup
-
-If you prefer to set up the project manually:
-
-1. Install required tools: Docker, Kubernetes (Minikube), Helm
-
-2. Build the Docker image:
-   ```bash
-   docker build -t fastapi-app:latest ./app
-   ```
-
-3. Apply Kubernetes configurations:
-   ```bash
-   kubectl apply -f deployment.yaml
-   kubectl apply -f service.yaml
-   kubectl apply -f service-monitor.yaml
-   ```
-
-4. Install Prometheus and Grafana:
-   ```bash
-   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-   helm repo update
-   helm install monitoring prometheus-community/kube-prometheus-stack
-   ```
-
-5. Apply the Grafana dashboard:
-   ```bash
-   kubectl create configmap grafana-dashboard-config --from-file=app/grafana-dashboard.json -n monitoring
-   kubectl label configmap grafana-dashboard-config grafana_dashboard=1 -n monitoring
-   ```
-
-6. Access the application and monitoring tools as described in the "Getting Started" section.
-
 ## Dependencies
 
-- Python 3.12
+Runtime dependencies are listed in `app/requirements.txt`:
+
 - FastAPI
 - Uvicorn
 - Gunicorn
-- Prometheus client
-- Transformers (for text generation)
-- Locust (for load testing)
+- starlette-exporter
+- prometheus-client
 
-For a complete list of Python dependencies, see `app/requirements.txt`.
+Development/load-test dependencies are in `app/requirements-dev.txt`.
 
-## Cleanup
+## Notes
 
-To remove all resources created by this project:
+This project intentionally avoids paid LLM APIs. The local generator is lightweight and free, but it is not as powerful as a hosted model like OpenAI or a real local transformer model.
+
+To remove Kubernetes resources:
 
 ```bash
-# Delete application resources
 kubectl delete -f deployment.yaml
 kubectl delete -f service.yaml
 kubectl delete -f service-monitor.yaml
-
-# Delete Prometheus and Grafana
-helm uninstall monitoring
-
-# If using Minikube, stop the cluster
-minikube stop
 ```
-
-This project provides a comprehensive example of deploying a FastAPI application on Kubernetes with integrated monitoring. It's designed to be easily deployable and extensible for your own projects.

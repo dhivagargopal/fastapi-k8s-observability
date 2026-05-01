@@ -8,34 +8,10 @@ spec:
   selector:
     matchLabels:
       app: fastapi
+  namespaceSelector:
+    matchNames:
+      - default
   endpoints:
     - port: http
       path: /metrics
       interval: 15s
-    - port: http
-      path: /
-      interval: 15s
-    - port: http
-      path: /health
-      interval: 15s
-    - port: http
-      path: /items/{item_id}
-      interval: 15s
-      metricRelabelings:
-        - sourceLabels: [__name__]
-          regex: 'http_request_duration_seconds.*'
-          action: keep
-    - port: http
-      path: /generate
-      interval: 15s
-      metricRelabelings:
-        - sourceLabels: [__name__]
-          regex: 'http_request_duration_seconds.*'
-          action: keep
-    - port: http
-      path: /generate_quantized
-      interval: 15s
-      metricRelabelings:
-        - sourceLabels: [__name__]
-          regex: 'http_request_duration_seconds.*'
-          action: keep
