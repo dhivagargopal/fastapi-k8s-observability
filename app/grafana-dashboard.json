@@ -105,7 +105,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(starlette_request_duration_seconds_count{job=\"fastapi-app\"}[5m])",
+          "expr": "rate(starlette_request_duration_seconds_count{job=\"fastapi-service\"}[5m])",
           "legendFormat": "{{path}}",
           "range": true,
           "refId": "A"
@@ -198,7 +198,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(starlette_request_duration_seconds_sum{job=\"fastapi-app\"}[5m]) / rate(starlette_request_duration_seconds_count{job=\"fastapi-app\"}[5m])",
+          "expr": "rate(starlette_request_duration_seconds_sum{job=\"fastapi-service\"}[5m]) / rate(starlette_request_duration_seconds_count{job=\"fastapi-service\"}[5m])",
           "legendFormat": "{{path}}",
           "range": true,
           "refId": "A"
@@ -290,7 +290,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(starlette_requests_total{job=\"fastapi-app\", status_code=~\"2..\"}[5m]))",
+          "expr": "sum(rate(starlette_requests_total{job=\"fastapi-service\", status_code=~\"2..\"}[5m]))",
           "legendFormat": "Success",
           "range": true,
           "refId": "A"
@@ -301,7 +301,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(starlette_requests_total{job=\"fastapi-app\", status_code=~\"[45]..\"}[5m]))",
+          "expr": "sum(rate(starlette_requests_total{job=\"fastapi-service\", status_code=~\"[45]..\"}[5m]))",
           "hide": false,
           "legendFormat": "Fail",
           "range": true,
@@ -395,7 +395,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "process_resident_memory_bytes{job=\"fastapi-app\"}",
+          "expr": "process_resident_memory_bytes{job=\"fastapi-service\"}",
           "legendFormat": "Memory Usage",
           "range": true,
           "refId": "A"
