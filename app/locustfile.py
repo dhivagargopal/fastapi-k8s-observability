@@ -1,6 +1,5 @@
 from locust import HttpUser, task, between
 import random
-import json
 
 class FastAPIUser(HttpUser):
     wait_time = between(1, 5)
@@ -25,9 +24,3 @@ class FastAPIUser(HttpUser):
             if response.status_code != 200:
                 response.failure(f"Got status code {response.status_code}")
 
-    @task(3)
-    def generate_text_quantized(self):
-        payload = {"text": "Once upon a time"}
-        with self.client.post("/generate_quantized", json=payload, catch_response=True) as response:
-            if response.status_code != 200:
-                response.failure(f"Got status code {response.status_code}")
