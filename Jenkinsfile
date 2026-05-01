@@ -240,15 +240,16 @@ pipeline {
         stage('Health Check') {
         // ──────────────────────────────────────────────────────────────────
             steps {
-                echo '==> Verifying /health endpoint via NodePort 30001...'
+                echo '==> Verifying /health endpoint via kubectl port-forward...'
                 withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
                     sh """
-                        NODE_IP=\$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-                        echo "Node IP: \${NODE_IP}"
+                        kubectl port-forward svc/fastapi-service 18000:8000 --namespace ${K8S_NAMESPACE} >/tmp/fastapi-port-forward.log 2>&1 &
+                        PF_PID=\$!
+                        trap 'kill \${PF_PID} 2>/dev/null || true' EXIT
 
                         # Retry up to 10 times with 10s delay (pods may still be initialising)
                         for i in \$(seq 1 10); do
-                            STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://\${NODE_IP}:30001/health)
+                            STATUS=\$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18000/health || true)
                             echo "Attempt \${i}: HTTP \${STATUS}"
                             if [ "\${STATUS}" = "200" ]; then
                                 echo "Health check passed!"
@@ -268,11 +269,15 @@ pipeline {
         stage('Verify Prometheus Scraping') {
         // ──────────────────────────────────────────────────────────────────
             steps {
-                echo '==> Checking /metrics endpoint is reachable...'
+                echo '==> Checking /metrics endpoint is reachable via kubectl port-forward...'
                 withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
                     sh """
-                        NODE_IP=\$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-                        METRICS=\$(curl -s http://\${NODE_IP}:30001/metrics | head -5)
+                        kubectl port-forward svc/fastapi-service 18000:8000 --namespace ${K8S_NAMESPACE} >/tmp/fastapi-port-forward.log 2>&1 &
+                        PF_PID=\$!
+                        trap 'kill \${PF_PID} 2>/dev/null || true' EXIT
+
+                        sleep 3
+                        METRICS=\$(curl -s http://127.0.0.1:18000/metrics | head -5)
                         echo "\${METRICS}"
 
                         if echo "\${METRICS}" | grep -q 'http_requests'; then
